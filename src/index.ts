@@ -6,6 +6,8 @@ import { loadEbayConfig } from "./ebay/config.js";
 import { PolicyService } from "./service/policy-service.js";
 import { SaleService } from "./service/sale-service.js";
 import { InMemorySaleItemStore, InMemorySellerPolicyStore } from "./storage/memory.js";
+import { InMemoryDraftStore } from "./storage/drafts-memory.js";
+import { DraftService } from "./service/draft-service.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -16,8 +18,9 @@ if (host !== "127.0.0.1" && host !== "localhost") {
 
 const policyService = new PolicyService(new InMemorySellerPolicyStore());
 const service = new SaleService(new InMemorySaleItemStore(), policyService);
+const draftService = new DraftService(new InMemoryDraftStore());
 const ebayConfig = loadEbayConfig();
-const handler = createMcpHandler(() => buildMcpServer(service, policyService, ebayConfig));
+const handler = createMcpHandler(() => buildMcpServer(service, policyService, draftService, ebayConfig));
 const nodeHandler = toNodeHandler(handler);
 const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
