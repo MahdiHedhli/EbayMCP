@@ -2,7 +2,9 @@ import { createServer } from "node:http";
 import { localhostHostValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { buildMcpServer } from "./mcp/server.js";
-import { InMemorySaleItemStore, SaleService } from "./service/sale-service.js";
+import { PolicyService } from "./service/policy-service.js";
+import { SaleService } from "./service/sale-service.js";
+import { InMemorySaleItemStore, InMemorySellerPolicyStore } from "./storage/memory.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "127.0.0.1";
@@ -11,8 +13,9 @@ if (host !== "127.0.0.1" && host !== "localhost") {
   throw new Error("v0.1 foundation intentionally binds only to loopback; add reviewed auth/host policy before remote binding");
 }
 
-const service = new SaleService(new InMemorySaleItemStore());
-const handler = createMcpHandler(() => buildMcpServer(service));
+const policyService = new PolicyService(new InMemorySellerPolicyStore());
+const service = new SaleService(new InMemorySaleItemStore(), policyService);
+const handler = createMcpHandler(() => buildMcpServer(service, policyService));
 const nodeHandler = toNodeHandler(handler);
 const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
