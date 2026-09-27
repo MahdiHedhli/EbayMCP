@@ -40,6 +40,8 @@ describe("Worker MCP route", () => {
     expect(unauthorized.status).toBe(401);
     expect(unauthorized.headers.get("WWW-Authenticate")).toBe("Bearer");
     expect((await worker.fetch(new Request("https://example.invalid/other"), env)).status).toBe(404);
+    expect((await worker.fetch(new Request("https://example.invalid/ebay/oauth/start"), env)).status).toBe(400);
+    expect((await worker.fetch(new Request("https://example.invalid/ebay/oauth/callback"), env)).status).toBe(400);
     expect((await worker.fetch(new Request("https://example.invalid/mcp", {
       headers: { Authorization: `Bearer ${token}`, Origin: "https://evil.invalid" },
     }), env)).status).toBe(403);

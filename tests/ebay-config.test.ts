@@ -21,7 +21,9 @@ describe("eBay configuration boundary", () => {
       EBAY_ENVIRONMENT: "sandbox",
       EBAY_CLIENT_ID: "id",
       EBAY_CLIENT_SECRET: "super-secret",
-      EBAY_REDIRECT_URI: "https://example.invalid/callback",
+      EBAY_RUNAME: "synthetic-runame",
+      EBAY_CALLBACK_URL: "https://example.invalid/ebay/oauth/callback",
+      EBAY_TOKEN_KEY_SANDBOX: btoa("01234567890123456789012345678901"),
     });
     const plan = buildOAuthConnectPlan(config);
     expect(JSON.stringify(plan)).not.toContain("super-secret");

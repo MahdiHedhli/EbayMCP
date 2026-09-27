@@ -1,6 +1,8 @@
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { authChallenge, oauthConfig, resourceMetadata, verifyOAuthToken, type OAuthEnv } from "./auth/oauth.js";
 import { loadEbayConfig } from "./ebay/config.js";
+import { EbaySellerAuth } from "./ebay/seller-auth.js";
+import { ActiveListingsService } from "./ebay/active-listings.js";
 import { buildMcpServer } from "./mcp/server.js";
 import { DraftService } from "./service/draft-service.js";
 import { PolicyService } from "./service/policy-service.js";
@@ -13,7 +15,10 @@ export interface WorkerEnv extends OAuthEnv {
   EBAY_ENVIRONMENT?: string;
   EBAY_CLIENT_ID?: string;
   EBAY_CLIENT_SECRET?: string;
-  EBAY_REDIRECT_URI?: string;
+  EBAY_RUNAME?: string;
+  EBAY_CALLBACK_URL?: string;
+  EBAY_TOKEN_KEY_SANDBOX?: string;
+  EBAY_TOKEN_KEY_PRODUCTION?: string;
 }
 
 async function validToken(provided: string | null, expected: string | undefined): Promise<boolean> {
@@ -36,6 +41,29 @@ export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
     const config = oauthConfig(env);
+    if (url.pathname === "/ebay/oauth/start") {
+      if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
+      try {
+        const consentUrl = await new EbaySellerAuth(env.DB, loadEbayConfig(env)).authorize(url);
+        return new Response(null, { status: 302, headers: { Location: consentUrl, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+      } catch {
+        return new Response("eBay connection link invalid or expired.", { status: 400, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+      }
+    }
+    if (url.pathname === "/ebay/oauth/callback") {
+      if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
+      const seller = new EbaySellerAuth(env.DB, loadEbayConfig(env));
+      try {
+        await seller.callback(url);
+        return new Response("eBay seller connected. You may close this page.", { headers: {
+          "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Type": "text/plain; charset=utf-8",
+        } });
+      } catch {
+        return new Response("eBay connection failed. Start a new connection from your MCP client.", { status: 400, headers: {
+          "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Type": "text/plain; charset=utf-8",
+        } });
+      }
+    }
     if (url.pathname === "/.well-known/oauth-protected-resource") {
       if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
       if (!config || url.origin !== config.resource) return new Response("Not found", { status: 404 });
@@ -59,7 +87,9 @@ export default {
     const saleService = new SaleService(new D1SaleItemStore(env.DB), policyService);
     const draftService = new DraftService(new D1DraftStore(env.DB));
     const ebayConfig = loadEbayConfig(env);
-    const handler = createMcpHandler(() => buildMcpServer(saleService, policyService, draftService, ebayConfig, "d1"));
+    const sellerAuth = new EbaySellerAuth(env.DB, ebayConfig);
+    const listings = new ActiveListingsService(ebayConfig, sellerAuth);
+    const handler = createMcpHandler(() => buildMcpServer(saleService, policyService, draftService, ebayConfig, "d1", { sellerAuth, listings }));
     const response = await handler.fetch(request);
     const headers = new Headers(response.headers);
     headers.set("Cache-Control", "no-store");

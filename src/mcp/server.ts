@@ -4,6 +4,8 @@ import { PolicyService } from "../service/policy-service.js";
 import { getEbayCapabilityStatus } from "../ebay/capabilities.js";
 import { buildOAuthConnectPlan } from "../ebay/oauth.js";
 import type { EbayConfig } from "../ebay/config.js";
+import type { EbaySellerAuth } from "../ebay/seller-auth.js";
+import type { ActiveListingsService } from "../ebay/active-listings.js";
 import { DraftService } from "../service/draft-service.js";
 import { recommendSaleFormat } from "../service/recommendation-service.js";
 import { SaleService } from "../service/sale-service.js";
@@ -17,7 +19,7 @@ function result(data: unknown) {
   };
 }
 
-export function buildMcpServer(service: SaleService, policyService: PolicyService, draftService: DraftService, ebayConfig: EbayConfig, persistence: "memory" | "d1" = "memory"): McpServer {
+export function buildMcpServer(service: SaleService, policyService: PolicyService, draftService: DraftService, ebayConfig: EbayConfig, persistence: "memory" | "d1" = "memory", ebay?: { sellerAuth: EbaySellerAuth; listings: ActiveListingsService }): McpServer {
   const server = new McpServer(
     { name: "ebay-manager", version: "0.1.0" },
     {
@@ -34,14 +36,15 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
     },
     async () => {
       const policy = await policyService.getSellerPolicy();
-      const ebay = getEbayCapabilityStatus(ebayConfig);
+      const capabilities = getEbayCapabilityStatus(ebayConfig);
+      const connection = ebay ? await ebay.sellerAuth.status() : null;
       return result({
         version: "0.1.0",
         persistence,
-        ebayConnected: ebay.sellerConnected,
-        ebayEnvironment: ebay.environment,
-        ebayOauthConfigured: ebay.oauthConfigured,
-        publicationEnabled: ebay.publicationEnabled,
+        ebayConnected: connection?.status === "CONNECTED" || capabilities.sellerConnected,
+        ebayEnvironment: capabilities.environment,
+        ebayOauthConfigured: capabilities.oauthConfigured,
+        publicationEnabled: capabilities.publicationEnabled,
         chatgptTarget: "streamable_http_private_app_requires_oauth",
         codexTarget: "same_mcp_service",
         defaultShippingSafetyMarginBps: policy.shippingSafetyMarginBps,
@@ -56,11 +59,37 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
         "Report whether server-side eBay OAuth configuration is ready for a seller authorization flow. Never returns OAuth credentials or tokens.",
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () => result({
-      capabilities: getEbayCapabilityStatus(ebayConfig),
+    async () => result({ capabilities: getEbayCapabilityStatus(ebayConfig),
       connectPlan: buildOAuthConnectPlan(ebayConfig),
-    }),
+      connection: ebay ? await ebay.sellerAuth.status() : { status: "DISCONNECTED" } }),
   );
+
+  if (ebay) {
+    server.registerTool("get_ebay_seller_connection_status", {
+      description: "OBSERVE the eBay seller connection state without returning credentials or account identifiers.",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    }, async () => result(await ebay.sellerAuth.status()));
+
+    server.registerTool("begin_ebay_seller_connection", {
+      description: "Create a short-lived connection link that redirects to eBay consent. The seller must open it and perform eBay login and consent personally.",
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    }, async () => result(await ebay.sellerAuth.begin()));
+
+    server.registerTool("get_active_listings", {
+      description: "OBSERVE the authenticated seller's active eBay listings. Read-only eBay Trading API call. Missing counts are unknown, not zero.",
+      inputSchema: z.object({ limit: z.number().int().min(1).max(50).optional(), cursor: z.string().regex(/^[0-9]{1,3}$/).optional() }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    }, async ({ limit, cursor }) => {
+      try { return result(await ebay.listings.get(limit, cursor)); }
+      catch (error) { return { isError: true, content: [{ type: "text" as const,
+        text: error instanceof Error && error.message === "EBAY_RECONNECT_REQUIRED" ? "EBAY_RECONNECT_REQUIRED" : "EBAY_LISTINGS_UNAVAILABLE" }] }; }
+    });
+
+    server.registerTool("disconnect_ebay_seller", {
+      description: "Disconnect the seller locally and request eBay refresh-token revocation. This removes access to active listings.",
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    }, async () => result(await ebay.sellerAuth.disconnect()));
+  }
 
   server.registerTool(
     "create_sale_item",

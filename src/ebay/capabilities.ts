@@ -10,7 +10,7 @@ export interface EbayCapabilityStatus {
 }
 
 export function getEbayCapabilityStatus(config: EbayConfig): EbayCapabilityStatus {
-  const oauthConfigured = Boolean(config.clientId && config.clientSecret && config.redirectUri);
+  const oauthConfigured = Boolean(config.clientId && config.clientSecret && config.runame && config.tokenEncryptionKey && config.callbackUrl);
   return {
     environment: config.environment,
     oauthConfigured,
