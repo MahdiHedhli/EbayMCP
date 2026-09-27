@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { PolicyService } from "../service/policy-service.js";
+import { getEbayCapabilityStatus } from "../ebay/capabilities.js";
+import { buildOAuthConnectPlan } from "../ebay/oauth.js";
+import type { EbayConfig } from "../ebay/config.js";
 import { SaleService } from "../service/sale-service.js";
 
 const factsSchema = z.record(z.string(), z.string()).default({});
@@ -12,7 +15,7 @@ function result(data: unknown) {
   };
 }
 
-export function buildMcpServer(service: SaleService, policyService: PolicyService): McpServer {
+export function buildMcpServer(service: SaleService, policyService: PolicyService, ebayConfig: EbayConfig): McpServer {
   const server = new McpServer(
     { name: "ebay-manager", version: "0.1.0" },
     {
@@ -29,16 +32,32 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
     },
     async () => {
       const policy = await policyService.getSellerPolicy();
+      const ebay = getEbayCapabilityStatus(ebayConfig);
       return result({
         version: "0.1.0",
         persistence: "storage_interface_ready_sqlite_schema_present_runtime_driver_pending",
-        ebayConnected: false,
-        publicationEnabled: false,
+        ebayConnected: ebay.sellerConnected,
+        ebayEnvironment: ebay.environment,
+        ebayOauthConfigured: ebay.oauthConfigured,
+        publicationEnabled: ebay.publicationEnabled,
         chatgptTarget: "streamable_http_secure_mcp_tunnel",
         codexTarget: "same_mcp_service",
         defaultShippingSafetyMarginBps: policy.shippingSafetyMarginBps,
       });
     },
+  );
+
+  server.registerTool(
+    "get_ebay_connection_readiness",
+    {
+      description:
+        "Report whether server-side eBay OAuth configuration is ready for a seller authorization flow. Never returns OAuth credentials or tokens.",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => result({
+      capabilities: getEbayCapabilityStatus(ebayConfig),
+      connectPlan: buildOAuthConnectPlan(ebayConfig),
+    }),
   );
 
   server.registerTool(
