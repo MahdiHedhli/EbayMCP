@@ -2,7 +2,9 @@
 
 ## Current phase
 
-Phase 0 is discovery and design. No implementation or deployment is authorized by this documentation change. Wait for the project owner's architecture decision before starting a build slice. A documentation merge alone does not authorize live seller-account actions.
+The v1 service foundation is implemented and deployed as a Cloudflare Worker with D1. Current work is limited to finishing private ChatGPT/Codex MCP connectivity and safe sandbox/read-only discovery. Synthetic local sale records and drafts are not eBay writes. No production listing, messaging, fulfillment, or other seller-account mutation is authorized.
+
+Cloudflare access configuration and deployment-specific values stay outside this public repository. A private MCP Portal may expose only explicitly reviewed tools behind Managed OAuth and an exact-identity Access policy. Keep the Worker fail-closed when called directly. Do not create or enable live eBay write tools as part of the connection work.
 
 ## Invariants for later implementation
 

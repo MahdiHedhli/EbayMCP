@@ -1,25 +1,56 @@
-# Cloudflare Workers and D1 foundation
+# Cloudflare Worker and private MCP access
 
-Verified against official documentation on September 27, 2026. This slice uses one stateless Streamable HTTP MCP endpoint at `/mcp`, with D1 behind the existing storage interfaces. The Node loopback adapter remains for local use. No eBay write or publication tool exists.
+Verified against the live Cloudflare dashboard and official documentation on September 27, 2026. The service is deployed as a stateless Streamable HTTP MCP Worker with a production D1 binding. No eBay seller account is connected, and no production publication or seller-write tool exists.
 
-## Deployment inputs
+## Live state
 
-- Replace the placeholder `database_id` in `wrangler.jsonc` after a D1 resource is created.
-- Apply `migrations/001_initial.sql` and `migrations/002_listing_drafts.sql` to that database before serving requests.
-- Provision `MCP_BEARER_TOKEN` as a Worker secret with a random value of at least 32 characters. The Worker fails closed when it is absent or short. Never put it in `wrangler.jsonc` or Git.
-- Choose an OAuth 2.1 authorization server that publishes `/.well-known/oauth-authorization-server` or OIDC discovery, supports authorization code with PKCE S256 and either CIMD, DCR, or a predefined ChatGPT client. Its metadata must advertise its actual token endpoint authentication method. Configure the exact ChatGPT redirect URI shown by ChatGPT. The provider must carry ChatGPT's `resource` parameter through authorization and token exchange and issue RS256 JWT access tokens with `aud` equal to `MCP_PUBLIC_ORIGIN`, `iss` equal to `MCP_OAUTH_ISSUER`, and `mcp:use` in `scope` (or `scp`). An opaque token provider or one that cannot bind the resource is incompatible with this Worker validator.
-- Provision `MCP_PUBLIC_ORIGIN`, `MCP_OAUTH_ISSUER`, `MCP_OAUTH_JWKS_URI`, and `MCP_OAUTH_ALLOWED_SUBJECT` as Worker configuration after provider selection. The origin must be the exact public HTTPS Worker origin, without `/mcp` or a trailing slash. The issuer must exactly match the provider's discovery `issuer`; the JWKS URI must be its published HTTPS public-key endpoint. The allowed subject must be the exact `sub` claim of the seller identity permitted to access this single-seller D1 store. Keep deployment-specific values outside Git. Incomplete or invalid OAuth configuration publishes no protected-resource metadata and accepts no OAuth tokens.
-- Check the provider's authorization-server discovery, `resource` audience mapping, S256 support, client-registration method, and redirect allowlist before enabling the private ChatGPT connection. The Worker publishes `/.well-known/oauth-protected-resource`, challenges unauthenticated `/mcp` requests with that URL, and validates JWT signature, issuer, subject, resource audience, expiry, and scope. The same `/mcp` endpoint continues to accept the static bearer secret for Codex. OAuth grants MCP access only; it never constitutes an ACT approval or eBay permission.
-- Verify both the ChatGPT OAuth connection and the Codex bearer connection against the same deployed endpoint. These account-specific checks have not yet been performed.
+- Production Worker and D1 binding are present in Cloudflare.
+- An unauthenticated request to the Worker `/mcp` route returns `401`; the Worker is fail-closed when no valid bearer secret is supplied.
+- The Worker-level `/.well-known/oauth-protected-resource` route returns `404` because its optional custom OAuth verifier is not configured. This is not the selected ChatGPT discovery path.
+- No Cloudflare MCP server or MCP Portal was present when inspected. The Portal configuration is pending the action-time confirmation required for creating authenticated access.
+- `npm run worker:build` is a Wrangler dry run. The local tests use Miniflare D1 and synthetic records; they do not prove production eBay entitlements.
 
-`npm run worker:build` only bundles and validates locally. The local tests use Miniflare D1 and synthetic records. No account-specific eBay or Cloudflare entitlement has been probed.
+## Selected client architecture
+
+Use Cloudflare MCP Portals with Managed OAuth. MCP Portals are generally available and provide one HTTPS `/mcp` endpoint for ChatGPT and Codex. Managed OAuth protects the Portal and handles client OAuth; it does not replace upstream Worker authentication. Do not use a generic self-hosted Access application or turn on Managed OAuth directly for the Worker: the Worker does not validate Cloudflare's `Cf-Access-Jwt-Assertion` header.
+
+The Portal-to-Worker hop uses a separate high-entropy static bearer credential:
+
+1. Store it only as the Cloudflare Worker secret `MCP_BEARER_TOKEN` and as the Cloudflare MCP server's upstream Authorization bearer credential.
+2. Never pass this upstream credential to ChatGPT, Codex, prompts, logs, local configuration, or Git.
+3. Restrict both the MCP server and Portal with an Allow policy for the single approved owner identity. Do not add Bypass, public, or broad-domain policies.
+4. Keep the Worker direct origin fail-closed. Its public workers.dev hostname is not an anonymous access path; requests without the separate bearer must remain unauthorized.
+5. Disable Portal Code Mode and expose only the reviewed MCP tools. In particular, do not expose `set_shipping_safety_margin` through the Portal; retain the +25% safety margin.
+6. Use the Portal HTTPS `/mcp` URL for both ChatGPT and Codex. Codex should authenticate with its OAuth flow, not receive the Worker bearer.
+
+Cloudflare Managed OAuth is the authorization server for the Portal. The Portal is responsible for OAuth/protected-resource discovery seen by clients; the Worker's optional JWT validator is a separate path and remains unconfigured unless a later architecture change explicitly requires direct client-to-Worker OAuth. Access is authentication only; it does not constitute eBay API entitlement, tool-level approval, or permission to publish.
+
+## Acceptance checks
+
+Before calling the connection ready:
+
+- Confirm the Portal `/mcp` URL is protected by Cloudflare Managed OAuth and exact-identity Access policy.
+- Verify OAuth authorization-server and protected-resource discovery from the client-visible Portal URL.
+- Confirm unauthenticated Portal and direct Worker requests cannot initialize MCP.
+- Authenticate an approved MCP client and complete `initialize`, `tools/list`, and a harmless tool call.
+- Create and retrieve one clearly synthetic sale record in D1; do not use buyer or real inventory data for the smoke test.
+- Confirm `set_shipping_safety_margin` is absent from the Portal tool list and the stored default remains `2500` basis points (+25%).
+- Verify no live eBay write/publication tool is available.
+- Verify the same Portal endpoint is registered in ChatGPT and Codex. OAuth sign-in/consent is a user step; do not complete human approval on the user's behalf.
+
+## ChatGPT plan limitation
+
+OpenAI's current Help Center states that Pro users can connect custom MCP apps with read/fetch permissions, while full MCP write/modify access is rolling out for Business, Enterprise, and Edu. Therefore the requested ChatGPT test that creates a synthetic D1 record may be unavailable on a personal Pro account even when Portal OAuth and tool discovery work. Treat that tool call as plan-gated; do not weaken server authentication or tool approval to work around it.
 
 ## Sources
 
-- [Cloudflare MCP transport](https://developers.cloudflare.com/agents/model-context-protocol/protocol/transport/) documents Streamable HTTP and the stateless handler.
+- [Cloudflare MCP server portals](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/) documents server registration, bearer credentials, Portal policies, Managed OAuth, discovery, and the Portal `/mcp` endpoint.
+- [Cloudflare Managed OAuth](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/) documents enabling Managed OAuth on a Portal.
+- [Cloudflare secure MCP servers](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/secure-mcp-servers/) warns to enable Managed OAuth only where the MCP server validates Cloudflare Access JWTs.
+- [Cloudflare identity providers](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/) documents Cloudflare identity and one-time PIN options.
+- [Cloudflare MCP transport](https://developers.cloudflare.com/agents/model-context-protocol/protocol/transport/) documents Streamable HTTP.
 - [Cloudflare D1 binding API](https://developers.cloudflare.com/d1/worker-api/) documents prepared statements and D1 results.
-- [Cloudflare D1 local development](https://developers.cloudflare.com/d1/best-practices/local-development/) documents local bindings and migrations.
-- [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) documents D1 binding fields and migration directories.
-- [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth) documents OAuth 2.1, protected resource metadata, and per-request token verification.
-- [Cloudflare MCP authorization](https://developers.cloudflare.com/agents/model-context-protocol/protocol/authorization/) distinguishes user authentication, OAuth client authorization, and permission checks inside tools.
-- [OpenAI private connection guidance](https://developers.openai.com/plugins/deploy/connect-chatgpt) documents HTTPS `/mcp` and Secure MCP Tunnel options.
+- [Cloudflare Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) documents D1 binding and migration configuration.
+- [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth) documents OAuth 2.1 discovery, PKCE, audience binding, and token validation.
+- [OpenAI Codex MCP configuration](https://developers.openai.com/codex/mcp) documents remote Streamable HTTP configuration and OAuth login.
+- [ChatGPT developer mode and MCP apps](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) documents private app creation, tool scanning, plan limitations, and use in ChatGPT web chats.

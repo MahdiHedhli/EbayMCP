@@ -1,6 +1,6 @@
 # Phase 0 API discovery and permission ledger
 
-**As of 2026-09-27. Documentation research only; no authenticated seller API probe, consent request, subscription, listing or deployment has been performed.** A documented method is not proof of production entitlement or permission to expose its results through MCP.
+**As of 2026-09-27.** Cloudflare Worker/D1 foundation is deployed; no authenticated eBay seller API probe, consent request, subscription, listing, or production seller action has been performed. A documented method is not proof of production entitlement or permission to expose its results through MCP.
 
 ## Critical gates
 
@@ -61,18 +61,18 @@ Plan marketplace-account deletion processing and data minimization before produc
 
 ## ChatGPT and Codex
 
-Secure MCP Tunnel is an official outbound connection for private servers. It needs a tunnel identity/runtime credential and separate Platform tunnel permissions and ChatGPT developer-mode access. It is not public plugin distribution. Recommend this for ChatGPT and direct authenticated private Streamable HTTP for Codex. [O1]
+The deployed Worker is reachable over HTTPS but rejects requests without its private upstream bearer. The selected design places a Cloudflare MCP Portal with Managed OAuth in front of that Worker; ChatGPT and Codex will use the same Portal `/mcp` endpoint. Secure MCP Tunnel is an alternative for a private/on-premises server, not needed for this Cloudflare-hosted Worker. [O1, O4, O5]
 
-OpenAI's developer guide lists web read/write support including Pro, while its Help Center still limits Pro to read/fetch and says MCP apps are web-only. These sources conflict on plan access. Treat mobile, write access and file transfer as acceptance tests, not promises based on another installed plugin. Ordinary photo attachments must not be assumed to reach the server automatically. A browser upload page is a fallback, not a claim of the final one-message UX. [O2-O3]
+OpenAI's current Help Center says Pro users can connect custom MCP apps with read/fetch permissions, while full MCP write/modify support is rolling out for Business, Enterprise, and Edu. Treat ChatGPT-side writes as plan-gated and test the actual workspace before relying on them. MCP apps are web-only. Ordinary photo attachments must not be assumed to reach the server automatically. [O3]
 
-Codex documents MCP over stdio and Streamable HTTP, user/project configuration, OAuth login and tool allowlists. Proposed private configuration (illustrative, not deployed): [O4]
+Codex supports remote Streamable HTTP MCP and OAuth login. Register the same private Portal endpoint used by ChatGPT; keep its concrete URL and identity policy in local account configuration, not Git. [O4]
 
 ```toml
 [mcp_servers.ebay_manager]
-url = "https://ebay-manager.example.internal/mcp"
+url = "https://<private-portal-host>/mcp"
 ```
 
-Use `codex mcp login ebay_manager` against the service's OAuth provider. Any bearer-token fallback is a scoped MCP client credential, never an eBay token. A draft-only worker principal remains unable to approve or publish even if its local allowlist is changed. Test scheduled custom-tool availability separately; do not equate conversational tool support with unattended task support.
+Use `codex mcp login ebay_manager` to authorize with Cloudflare Managed OAuth. Do not give Codex the Worker's upstream bearer. Test scheduled custom-tool availability separately; do not equate conversational tool support with unattended task support.
 
 ## Primary sources
 
@@ -108,3 +108,4 @@ All sources below were reviewed or retrieved during this discovery. E19 records 
 - [O2: ChatGPT developer-mode guide](https://developers.openai.com/api/docs/guides/developer-mode)
 - [O3: Developer-mode Help Center requirements](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt)
 - [O4: Codex MCP configuration](https://developers.openai.com/codex/mcp)
+- [O5: Cloudflare MCP server portals](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/)
