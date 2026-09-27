@@ -17,21 +17,23 @@ Common mutation/version fields above are omitted from signatures below for reada
 | Tool | Essential contract |
 |---|---|
 | `get_capabilities()` | Per-module enabled/blocked/unknown status, environment, required reconnect/permission checks, schema version; no secrets |
-| `create_item(disposition, facts, location_ref?)` | Returns UUID, stable SKU and version; facts carry source and confidence labels |
+| `create_sale_item(facts)` | Returns UUID, stable SKU and version; persists only sale-relevant facts with source/confidence labels |
 | `get_item(item_id)` | Current projection, draft/listing references, blockers and next action |
-| `list_items(filter, cursor?, limit)` | Bounded query by disposition, stage, location, incomplete draft or attention state |
-| `update_item(item_id, patch)` | Allowlisted fact changes only; cannot write listing status, approval or financial outcomes |
+| `list_sale_items(filter, cursor?, limit)` | Bounded query by sale stage, incomplete draft or attention state |
+| `update_sale_item(item_id, patch)` | Allowlisted sale-fact changes only; cannot write listing status, approval or financial outcomes |
 | `create_photo_upload(item_id, media_type, byte_length)` | Short-lived, bounded upload handle; host transport adapter transfers actual bytes |
 | `finalize_photo(item_id, upload_id)` | Verify stored bytes, digest, type and ownership; create private asset reference |
 | `list_photos(item_id)` | Private/public-derivative metadata; authorized preview links only |
 | `search_active_listings(query, marketplace, filters, cursor?)` | eBay adapter retrieval only after entitlement and data-use checks; explicitly ACTIVE_ASK |
 | `record_research(item_id, evidence[])` | Typed provenance and permissions; disallow unsupported verified-sale assertions |
+| `recommend_sale_format(item_id, evidence_refs[])` | Fixed-price vs auction recommendation with rationale, uncertainty and evidence; no publication side effect |
 | `find_categories(query, marketplace)` | Candidate leaf categories and evidence, not an authoritative visual identification |
 | `get_listing_requirements(category_id, marketplace)` | Specifics, condition constraints and relevant seller requirements with freshness |
 | `create_draft(item_id, content)` | Local versioned draft; no implicit eBay mutation |
 | `get_draft(draft_id, version?)` | Copy, photos, price source, specifics, shipping and outstanding questions |
 | `update_draft(draft_id, patch)` | New version; invalidate dependent approval proposals |
-| `validate_draft(draft_id, version)` | Local checks plus supported non-publishing eBay verification; fee estimate and warnings |
+| `estimate_shipping(item_id, package?, destination_basis?)` | Base estimate plus persisted seller safety margin and protected estimate; default margin 25%; no postage purchase |
+| `validate_draft(draft_id, version)` | Local checks plus supported non-publishing eBay verification; fee/protected-shipping estimates and warnings |
 | `prepare_publication(draft_id, version)` | Immutable action ID, exact terms/diff, review URL and required approvals; cannot publish |
 | `get_action(action_id)` | Proposal, status and redacted approval receipt; no redeemable approval secret |
 | `execute_approved_action(action_id)` | Closed, server-owned action type; fresh authorization/reconciliation; no replacement payload |
@@ -109,7 +111,7 @@ Synthetic illustration of: list at $225, check the market after seven unsold day
 
 Enabling offers externally is part of the approved listing/change, not an effect of saving this policy. The $180 threshold is strictly greater-than and is neither an acceptance floor nor permission to accept. Shipping/tax basis must be visible in review. Unspecified minimums, cadence, notification delivery channel and handling times remain unset or inherit visible seller defaults; do not invent them.
 
-Future preference fields include listing type/duration, initial strategy, gross/net minimum basis, first-review delay, reduction cadence, maximum cumulative reduction, minimum net proceeds, relist criteria, quiet hours, digest cadence and handling expectations. Validate these against applicable marketplace/category rules. Changing a global policy should not silently revise existing live listings: require an explicit migration scope and fresh action proposals.
+Seller policy includes `shipping_safety_margin_bps`, default `2500` (25%). Future preference fields include listing type/duration, initial strategy, gross/net minimum basis, first-review delay, reduction cadence, maximum cumulative reduction, minimum net proceeds, relist criteria, quiet hours, digest cadence and handling expectations. Validate these against applicable marketplace/category rules. Changing a global policy should not silently revise existing live listings: require an explicit migration scope and fresh action proposals.
 
 A low-activity rule must name its metric, observation window, threshold, freshness and coverage. `unknown`, `not_supported`, `not_authorized` and `stale` are not numerical zero. Never infer the last week had no activity from one current watcher snapshot. Authorized market valuation remains disabled until the discovery rights gate is resolved.
 
