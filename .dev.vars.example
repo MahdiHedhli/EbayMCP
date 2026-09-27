@@ -1,2 +1,9 @@
 # Copy to .dev.vars for local Worker testing only. Use a new random value of at least 32 characters.
 MCP_BEARER_TOKEN=replace-me
+# Optional ChatGPT OAuth resource configuration. All four values must be set together.
+# Use the public Worker origin and an OAuth 2.1 provider that issues RS256 JWT access tokens
+# with aud equal to that origin and the mcp:use scope.
+MCP_PUBLIC_ORIGIN=https://mcp.example.invalid
+MCP_OAUTH_ISSUER=https://auth.example.invalid
+MCP_OAUTH_JWKS_URI=https://auth.example.invalid/.well-known/jwks.json
+MCP_OAUTH_ALLOWED_SUBJECT=synthetic-owner-subject
