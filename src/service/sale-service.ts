@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { protectShippingEstimate, type Money } from "../domain/shipping.js";
 import type { SaleItem } from "../domain/types.js";
 import type { SaleItemStore } from "../storage/interfaces.js";
@@ -12,7 +11,7 @@ export class SaleService {
 
   async createSaleItem(facts: Record<string, string>): Promise<SaleItem> {
     const now = new Date().toISOString();
-    const id = randomUUID();
+    const id = crypto.randomUUID();
     return this.store.create({
       id,
       sku: `OD-${id.slice(0, 8).toUpperCase()}`,

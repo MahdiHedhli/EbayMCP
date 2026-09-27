@@ -17,7 +17,7 @@ function result(data: unknown) {
   };
 }
 
-export function buildMcpServer(service: SaleService, policyService: PolicyService, draftService: DraftService, ebayConfig: EbayConfig): McpServer {
+export function buildMcpServer(service: SaleService, policyService: PolicyService, draftService: DraftService, ebayConfig: EbayConfig, persistence: "memory" | "d1" = "memory"): McpServer {
   const server = new McpServer(
     { name: "ebay-manager", version: "0.1.0" },
     {
@@ -37,12 +37,12 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
       const ebay = getEbayCapabilityStatus(ebayConfig);
       return result({
         version: "0.1.0",
-        persistence: "storage_interface_ready_sqlite_schema_present_runtime_driver_pending",
+        persistence,
         ebayConnected: ebay.sellerConnected,
         ebayEnvironment: ebay.environment,
         ebayOauthConfigured: ebay.oauthConfigured,
         publicationEnabled: ebay.publicationEnabled,
-        chatgptTarget: "streamable_http_secure_mcp_tunnel",
+        chatgptTarget: "streamable_http_private_app_requires_oauth",
         codexTarget: "same_mcp_service",
         defaultShippingSafetyMarginBps: policy.shippingSafetyMarginBps,
       });
@@ -127,12 +127,13 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
       ),
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
-    async ({ currency, priceMinorUnits, ...input }) =>
+    async ({ currency, priceMinorUnits, categoryId, ...input }) =>
       result(await draftService.createDraft({
         ...input,
-        price: currency !== undefined && priceMinorUnits !== undefined
-          ? { currency: currency.toUpperCase(), minorUnits: priceMinorUnits }
-          : undefined,
+        ...(categoryId === undefined ? {} : { categoryId }),
+        ...(currency !== undefined && priceMinorUnits !== undefined
+          ? { price: { currency: currency.toUpperCase(), minorUnits: priceMinorUnits } }
+          : {}),
       })),
   );
 

@@ -19,15 +19,16 @@ if (host !== "127.0.0.1" && host !== "localhost") {
 const policyService = new PolicyService(new InMemorySellerPolicyStore());
 const service = new SaleService(new InMemorySaleItemStore(), policyService);
 const draftService = new DraftService(new InMemoryDraftStore());
-const ebayConfig = loadEbayConfig();
+const ebayConfig = loadEbayConfig(process.env);
 const handler = createMcpHandler(() => buildMcpServer(service, policyService, draftService, ebayConfig));
 const nodeHandler = toNodeHandler(handler);
 const validateHost = localhostHostValidation();
 const validateOrigin = localhostOriginValidation();
 
 const httpServer = createServer((req, res) => {
+  if (!req.method) { res.writeHead(400).end(); return; }
   if (!validateHost(req, res) || !validateOrigin(req, res)) return;
-  void nodeHandler(req, res);
+  void nodeHandler(req as Parameters<typeof nodeHandler>[0], res);
 });
 
 httpServer.listen(port, host, () => {

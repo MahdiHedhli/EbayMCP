@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local Worker testing only. Use a new random value of at least 32 characters.
+MCP_BEARER_TOKEN=replace-me

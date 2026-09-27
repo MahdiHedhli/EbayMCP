@@ -22,7 +22,7 @@ export function buildOAuthConnectPlan(config: EbayConfig): OAuthConnectPlan {
     status: "READY_FOR_USER_AUTHORIZATION",
     environment: config.environment,
     authorizationEndpoint: `${ebayAuthBaseUrl(config.environment)}/oauth2/authorize`,
-    redirectUri: config.redirectUri,
+    redirectUri: config.redirectUri!,
     requiredServerSecretsPresent: true,
   };
 }
