@@ -4,7 +4,7 @@
 
 ## 1. Recommended shape
 
-Build a private, single-seller modular service, initially using TypeScript, an official MCP SDK, SQLite on local durable storage, and a separate blob directory. This is a recommendation, not a committed stack. Start with one deployment and one domain model, not microservices or one implementation per host.
+Build a private, single-seller selling-lifecycle service, initially using TypeScript, an official MCP SDK, SQLite on local durable storage, and a separate blob directory. This is a recommendation, not a committed stack. Start with one deployment and one domain model, not microservices or one implementation per host.
 
 ```text
 ChatGPT -- Secure MCP Tunnel --+
@@ -30,7 +30,7 @@ For the first listing adapter, prefer Trading API plus a local canonical draft, 
 
 | Record | Responsibility |
 |---|---|
-| Item | Permanent UUID, stable SKU, physical location, disposition, identifying facts, uncertainty and verification tasks |
+| Sale item | Permanent UUID, stable SKU, only the facts needed to research/list/sell/fulfill the item, uncertainty and verification tasks |
 | Asset | Private original/public derivative, storage key, digest, content type, provenance, export permission |
 | Evidence | Source, evidence kind, observed time, quality, access/data-use rights and retention |
 | Draft revision | Immutable version, category, specifics, condition, photos, copy, price, shipping and policy references |
@@ -40,9 +40,17 @@ For the first listing adapter, prefer Trading API plus a local canonical draft, 
 | Due action/notification | Durable work, leases, attempts, due time, deduplication, delivery/acknowledgment status |
 | Action/approval/audit | Immutable proposal, authenticated authorization, execution state and tamper-evident history |
 
-Keep CAPTURED, IDENTIFIED, RESEARCHED and DRAFTED as useful workflow milestones, but do not force every reality into one status column. HOLD and ERROR are overlays. SELL/KEEP/FUTURE_HACKING/DONATE/E_WASTE are dispositions. APPROVED describes an exact action revision, not an item forever. LISTED/SOLD/SHIPPED/COMPLETE are projections over listing/order facts.
+Keep CAPTURED, IDENTIFIED, RESEARCHED and DRAFTED as useful selling-workflow milestones, but do not force every reality into one status column. HOLD and ERROR are overlays. General Operation Declutter inventory/disposition tracking stays outside this service; an item enters EbayMCP because it is being evaluated for sale. APPROVED describes an exact action revision, not an item forever. LISTED/SOLD/SHIPPED/COMPLETE are projections over listing/order facts.
 
 Relisting creates another listing record without another physical UUID. Sold, paid, ready to ship, carrier accepted, delivered and financially reconciled are distinct. Completion may reopen for a return or dispute. A research stage may finish with documented gaps; it must not imply sold evidence exists.
+
+### V1 product boundary
+
+V1 optimizes for `@eBay Manager sell this`, not basement inventory management. The host can retain broader cleanout context. EbayMCP persists only what is required to identify, research, choose a sale format, price, draft, publish, monitor, fulfill and audit a sale.
+
+Before drafting, the service/host should produce an explicit fixed-price-versus-auction recommendation using permitted evidence such as demand/liquidity, price dispersion, rarity and valuation confidence. This is a recommendation, not autonomous authority to publish.
+
+Shipping risk is first-class seller policy. The default safety margin is **25% above the best available carrier/shipping estimate**, configurable globally and overridable per item/category. Persist base estimate, margin, protected estimate, estimate provenance and actual shipping cost separately. Profitability and minimum-price recommendations use the protected estimate until actual cost is known. Never silently substitute the optimistic base quote.
 
 ## 4. Authorization and execution
 
