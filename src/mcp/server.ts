@@ -4,6 +4,8 @@ import { PolicyService } from "../service/policy-service.js";
 import { getEbayCapabilityStatus } from "../ebay/capabilities.js";
 import { buildOAuthConnectPlan } from "../ebay/oauth.js";
 import type { EbayConfig } from "../ebay/config.js";
+import { DraftService } from "../service/draft-service.js";
+import { recommendSaleFormat } from "../service/recommendation-service.js";
 import { SaleService } from "../service/sale-service.js";
 
 const factsSchema = z.record(z.string(), z.string()).default({});
@@ -15,7 +17,7 @@ function result(data: unknown) {
   };
 }
 
-export function buildMcpServer(service: SaleService, policyService: PolicyService, ebayConfig: EbayConfig): McpServer {
+export function buildMcpServer(service: SaleService, policyService: PolicyService, draftService: DraftService, ebayConfig: EbayConfig): McpServer {
   const server = new McpServer(
     { name: "ebay-manager", version: "0.1.0" },
     {
@@ -84,6 +86,69 @@ export function buildMcpServer(service: SaleService, policyService: PolicyServic
         return { isError: true, content: [{ type: "text" as const, text: "Sale item not found" }] };
       }
       return result(item);
+    },
+  );
+
+  server.registerTool(
+    "recommend_sale_format",
+    {
+      description:
+        "Recommend fixed-price versus auction from explicit market signals. This is advisory only and never publishes a listing.",
+      inputSchema: z.object({
+        knownValueConfidence: z.enum(["LOW", "MEDIUM", "HIGH"]),
+        demand: z.enum(["LOW", "MEDIUM", "HIGH"]),
+        priceDispersion: z.enum(["LOW", "MEDIUM", "HIGH"]),
+        rarity: z.enum(["COMMON", "UNCOMMON", "RARE"]),
+        evidenceRefs: z.array(z.string()).default([]),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (input) => result(recommendSaleFormat(input)),
+  );
+
+  server.registerTool(
+    "create_listing_draft",
+    {
+      description:
+        "Create a local eBay listing draft. This does not create or modify any listing on eBay.",
+      inputSchema: z.object({
+        itemId: z.string().uuid(),
+        title: z.string().min(1).max(80),
+        description: z.string().min(1),
+        condition: z.string().min(1),
+        saleFormat: z.enum(["FIXED_PRICE", "AUCTION"]),
+        currency: z.string().length(3).optional(),
+        priceMinorUnits: z.number().int().nonnegative().optional(),
+        categoryId: z.string().optional(),
+        itemSpecifics: z.record(z.string(), z.string()).default({}),
+      }).refine(
+        (v) => (v.currency === undefined) === (v.priceMinorUnits === undefined),
+        "currency and priceMinorUnits must be supplied together",
+      ),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ currency, priceMinorUnits, ...input }) =>
+      result(await draftService.createDraft({
+        ...input,
+        price: currency !== undefined && priceMinorUnits !== undefined
+          ? { currency: currency.toUpperCase(), minorUnits: priceMinorUnits }
+          : undefined,
+      })),
+  );
+
+  server.registerTool(
+    "get_listing_draft",
+    {
+      description: "Retrieve a local listing draft by UUID. No eBay request is made.",
+      inputSchema: z.object({ draftId: z.string().uuid() }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ draftId }) => {
+      const draft = await draftService.getDraft(draftId);
+      if (!draft) {
+        return { isError: true, content: [{ type: "text" as const, text: "Listing draft not found" }] };
+      }
+      return result(draft);
     },
   );
 
