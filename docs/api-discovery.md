@@ -61,11 +61,11 @@ Plan marketplace-account deletion processing and data minimization before produc
 
 ## ChatGPT and Codex
 
-The deployed Worker is reachable over HTTPS but rejects requests without its private upstream bearer. The selected design places a Cloudflare MCP Portal with Managed OAuth in front of that Worker; ChatGPT and Codex will use the same Portal `/mcp` endpoint. Secure MCP Tunnel is an alternative for a private/on-premises server, not needed for this Cloudflare-hosted Worker. [O1, O4, O5]
+The deployed Worker rejects requests without its private upstream bearer. A Cloudflare MCP Portal with Managed OAuth is configured in front of it; ChatGPT and Codex use the same Portal `/mcp` endpoint. Portal OAuth and protected-resource discovery have been verified, and the upstream MCP server is Ready with the reviewed tool set. The local Codex server entry exists but is not authenticated yet; no end-user authenticated MCP handshake or production-D1 synthetic create/retrieve test has completed. Secure MCP Tunnel is an alternative for a private/on-premises server, not needed for this Cloudflare-hosted Worker. [O1, O4, O5]
 
-OpenAI's current Help Center says Pro users can connect custom MCP apps with read/fetch permissions, while full MCP write/modify support is rolling out for Business, Enterprise, and Edu. Treat ChatGPT-side writes as plan-gated and test the actual workspace before relying on them. MCP apps are web-only. Ordinary photo attachments must not be assumed to reach the server automatically. [O3]
+OpenAI's current Help Center says Pro users can connect custom MCP apps with read/fetch permissions in developer mode; full MCP write/modify is available for Business and Enterprise/Edu. Treat ChatGPT-side writes as plan-gated and test the actual workspace before relying on them. MCP apps are web-only. Ordinary photo attachments must not be assumed to reach the server automatically. [O3]
 
-Codex supports remote Streamable HTTP MCP and OAuth login. Register the same private Portal endpoint used by ChatGPT; keep its concrete URL and identity policy in local account configuration, not Git. [O4]
+Codex supports remote Streamable HTTP MCP and OAuth login. The same private Portal endpoint used by ChatGPT is registered locally as `ebay_manager`; its concrete URL and identity policy stay in local account configuration, not Git. Run `codex mcp login ebay_manager` and complete Cloudflare's browser-based OAuth flow to finish user authorization. [O4]
 
 ```toml
 [mcp_servers.ebay_manager]

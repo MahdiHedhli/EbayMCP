@@ -2,7 +2,7 @@
 
 A proposed, harness-independent selling-lifecycle service for Operation Declutter: from a physical item's photos to a fast, reviewed eBay listing or auction, then through sale follow-up, fulfillment, and reconciliation.
 
-**Status: v1 foundation deployed to Cloudflare Workers with D1, September 27, 2026. No connected eBay seller account or live publication path. Private ChatGPT/Codex access is being completed through Cloudflare MCP Portals; production eBay writes remain disabled.**
+**Status: v1 foundation deployed to Cloudflare Workers with D1, September 27, 2026. Cloudflare MCP Portal and Managed OAuth are configured; user OAuth login and end-to-end client smoke tests remain. No connected eBay seller account or live publication path; production eBay writes remain disabled.**
 
 ChatGPT and Codex are clients of the same service. The service owns the minimum durable sale record, eBay access, policy, workflow state, approvals, and audit history. Hosts may supply vision, writing, and scheduling; they do not supply authorization merely by claiming that the seller approved something.
 
@@ -27,4 +27,4 @@ This repository contains public documentation and, after approval, application s
 
 The Worker uses the same MCP tool definitions and service classes as the optional Node loopback adapter (`npm run dev`). D1 persists sale items, listing drafts, and the seller policy, including the default 2,500 basis point shipping margin. The public `wrangler.jsonc` database UUID is a placeholder for local validation; account-specific deployment configuration stays outside Git. The Worker rejects unauthenticated direct requests. The selected ChatGPT/Codex path is a Cloudflare MCP Portal using Managed OAuth for clients and a separate server-side bearer credential for the Worker. See [Cloudflare connection setup](docs/cloudflare-foundation.md).
 
-The Worker rejects unauthenticated `/mcp` requests and cross-origin browser requests. ChatGPT and Codex use the same Streamable HTTP MCP service through the private Portal, with no separate business logic. Portal creation and account-specific OAuth acceptance remain external Cloudflare/ChatGPT configuration, not repository settings. See [Cloudflare foundation notes](docs/cloudflare-foundation.md).
+The Worker rejects unauthenticated `/mcp` requests and cross-origin browser requests. ChatGPT and Codex use the same Streamable HTTP MCP service through the private Portal, with no separate business logic. The Portal is deployed with Managed OAuth and exact-identity access policies; client OAuth acceptance remains a user action, and deployment-specific values stay outside Git. See [Cloudflare foundation notes](docs/cloudflare-foundation.md).

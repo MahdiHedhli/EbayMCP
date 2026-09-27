@@ -7,7 +7,12 @@ Verified against the live Cloudflare dashboard and official documentation on Sep
 - Production Worker and D1 binding are present in Cloudflare.
 - An unauthenticated request to the Worker `/mcp` route returns `401`; the Worker is fail-closed when no valid bearer secret is supplied.
 - The Worker-level `/.well-known/oauth-protected-resource` route returns `404` because its optional custom OAuth verifier is not configured. This is not the selected ChatGPT discovery path.
-- No Cloudflare MCP server or MCP Portal was present when inspected. The Portal configuration is pending the action-time confirmation required for creating authenticated access.
+- A Cloudflare MCP server and MCP Portal are configured. Keep their deployment-specific hostnames, account/resource identifiers, identity, and credentials out of this public repository.
+- Portal Managed OAuth is enabled, Code Mode is off, and both the Portal and upstream MCP server have exact-identity Allow policies. The Portal currently exposes 9 of 10 upstream tools, with no prompts; `set_shipping_safety_margin` is disabled at the Portal. The service policy default remains 2,500 bps (+25%).
+- The same Portal endpoint is registered in Codex, but its status is `Not logged in`. The local Codex login requires the user to authorize Cloudflare Managed OAuth in their browser.
+- Portal OAuth/protected-resource discovery has been verified: unauthenticated Portal `/mcp` returns `401` with a resource-metadata challenge, the protected-resource metadata identifies the Portal resource and Cloudflare Access authorization server, and the authorization-server metadata returns `200` with authorization-code/PKCE endpoints.
+- The Cloudflare upstream MCP server is Ready and its stored upstream bearer permits tool synchronization. This verifies upstream discovery, not an end-user authenticated Portal MCP handshake.
+- No authenticated end-user `initialize`/`tools/list`/tool-call handshake has been completed. No synthetic sale item has been created in production D1 yet. These checks require a user-authorized client session; do not impersonate the user to complete consent.
 - `npm run worker:build` is a Wrangler dry run. The local tests use Miniflare D1 and synthetic records; they do not prove production eBay entitlements.
 
 ## Selected client architecture
@@ -27,20 +32,19 @@ Cloudflare Managed OAuth is the authorization server for the Portal. The Portal 
 
 ## Acceptance checks
 
-Before calling the connection ready:
+The Cloudflare deployment is configured, but the end-to-end client connection is not yet accepted as ready. Remaining checks:
 
-- Confirm the Portal `/mcp` URL is protected by Cloudflare Managed OAuth and exact-identity Access policy.
-- Verify OAuth authorization-server and protected-resource discovery from the client-visible Portal URL.
-- Confirm unauthenticated Portal and direct Worker requests cannot initialize MCP.
-- Authenticate an approved MCP client and complete `initialize`, `tools/list`, and a harmless tool call.
+- Complete Codex login with `codex mcp login ebay_manager` and the browser-based Cloudflare OAuth flow.
+- Add the same Portal `/mcp` endpoint as a private custom MCP app in ChatGPT and complete its browser-based OAuth connection.
+- From an authenticated client, complete `initialize`, `tools/list`, and a harmless tool call. Confirm the Portal does not expose `set_shipping_safety_margin`.
 - Create and retrieve one clearly synthetic sale record in D1; do not use buyer or real inventory data for the smoke test.
-- Confirm `set_shipping_safety_margin` is absent from the Portal tool list and the stored default remains `2500` basis points (+25%).
+- Confirm the stored default remains `2500` basis points (+25%).
 - Verify no live eBay write/publication tool is available.
-- Verify the same Portal endpoint is registered in ChatGPT and Codex. OAuth sign-in/consent is a user step; do not complete human approval on the user's behalf.
+- Verify the same Portal endpoint is registered and authenticated in ChatGPT and Codex. OAuth sign-in/consent is a user step; do not complete human approval on the user's behalf.
 
 ## ChatGPT plan limitation
 
-OpenAI's current Help Center states that Pro users can connect custom MCP apps with read/fetch permissions, while full MCP write/modify access is rolling out for Business, Enterprise, and Edu. Therefore the requested ChatGPT test that creates a synthetic D1 record may be unavailable on a personal Pro account even when Portal OAuth and tool discovery work. Treat that tool call as plan-gated; do not weaken server authentication or tool approval to work around it.
+OpenAI's current Help Center states that Pro users can connect custom MCP apps with read/fetch permissions in developer mode, while full MCP write/modify access is available to Business and Enterprise/Edu plans. Therefore the requested ChatGPT test that creates a synthetic D1 record may be unavailable on a personal Pro account even when Portal OAuth and tool discovery work. Treat that tool call as plan-gated; do not weaken server authentication or tool approval to work around it.
 
 ## Sources
 
