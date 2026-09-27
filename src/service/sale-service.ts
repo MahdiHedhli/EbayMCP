@@ -1,28 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { DEFAULT_SHIPPING_SAFETY_MARGIN_BPS, protectShippingEstimate, type Money } from "../domain/shipping.js";
-import type { SaleItem, SellerPolicy } from "../domain/types.js";
-
-export interface SaleItemStore {
-  create(item: SaleItem): Promise<SaleItem>;
-  get(id: string): Promise<SaleItem | undefined>;
-}
-
-export class InMemorySaleItemStore implements SaleItemStore {
-  readonly #items = new Map<string, SaleItem>();
-  async create(item: SaleItem): Promise<SaleItem> {
-    this.#items.set(item.id, structuredClone(item));
-    return structuredClone(item);
-  }
-  async get(id: string): Promise<SaleItem | undefined> {
-    const item = this.#items.get(id);
-    return item ? structuredClone(item) : undefined;
-  }
-}
+import { protectShippingEstimate, type Money } from "../domain/shipping.js";
+import type { SaleItem } from "../domain/types.js";
+import type { SaleItemStore } from "../storage/interfaces.js";
+import { PolicyService } from "./policy-service.js";
 
 export class SaleService {
   constructor(
     private readonly store: SaleItemStore,
-    readonly policy: SellerPolicy = { shippingSafetyMarginBps: DEFAULT_SHIPPING_SAFETY_MARGIN_BPS },
+    private readonly policyService: PolicyService,
   ) {}
 
   async createSaleItem(facts: Record<string, string>): Promise<SaleItem> {
@@ -43,7 +28,8 @@ export class SaleService {
     return this.store.get(id);
   }
 
-  estimateProtectedShipping(base: Money) {
-    return protectShippingEstimate(base, this.policy.shippingSafetyMarginBps);
+  async estimateProtectedShipping(base: Money) {
+    const policy = await this.policyService.getSellerPolicy();
+    return protectShippingEstimate(base, policy.shippingSafetyMarginBps);
   }
 }
