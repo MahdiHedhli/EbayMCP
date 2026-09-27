@@ -1,0 +1,26 @@
+# Runtime state and secrets must live outside the repository.
+.env
+.env.*
+!.env.example
+/secrets/
+/var/
+/data/
+/uploads/
+/artifacts/
+/backups/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+node_modules/
+dist/
+coverage/
+.DS_Store
