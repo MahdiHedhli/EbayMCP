@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
+import { PolicyService } from "../service/policy-service.js";
 import { SaleService } from "../service/sale-service.js";
 
 const factsSchema = z.record(z.string(), z.string()).default({});
@@ -11,7 +12,7 @@ function result(data: unknown) {
   };
 }
 
-export function buildMcpServer(service: SaleService): McpServer {
+export function buildMcpServer(service: SaleService, policyService: PolicyService): McpServer {
   const server = new McpServer(
     { name: "ebay-manager", version: "0.1.0" },
     {
@@ -26,16 +27,18 @@ export function buildMcpServer(service: SaleService): McpServer {
       description: "Describe the current Ebay Manager build and safety boundaries.",
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () =>
-      result({
+    async () => {
+      const policy = await policyService.getSellerPolicy();
+      return result({
         version: "0.1.0",
-        persistence: "foundation_in_memory_only",
+        persistence: "storage_interface_ready_sqlite_schema_present_runtime_driver_pending",
         ebayConnected: false,
         publicationEnabled: false,
         chatgptTarget: "streamable_http_secure_mcp_tunnel",
         codexTarget: "same_mcp_service",
-        defaultShippingSafetyMarginBps: service.policy.shippingSafetyMarginBps,
-      }),
+        defaultShippingSafetyMarginBps: policy.shippingSafetyMarginBps,
+      });
+    },
   );
 
   server.registerTool(
@@ -66,6 +69,27 @@ export function buildMcpServer(service: SaleService): McpServer {
   );
 
   server.registerTool(
+    "get_seller_policy",
+    {
+      description: "Read the current seller policy used by listing and shipping recommendations.",
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () => result(await policyService.getSellerPolicy()),
+  );
+
+  server.registerTool(
+    "set_shipping_safety_margin",
+    {
+      description:
+        "Change the seller's shipping safety margin in basis points. This changes recommendation math only and does not modify a live eBay listing.",
+      inputSchema: z.object({ shippingSafetyMarginBps: z.number().int().min(0).max(10000) }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async ({ shippingSafetyMarginBps }) =>
+      result(await policyService.setShippingSafetyMarginBps(shippingSafetyMarginBps)),
+  );
+
+  server.registerTool(
     "estimate_shipping",
     {
       description:
@@ -77,7 +101,7 @@ export function buildMcpServer(service: SaleService): McpServer {
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ currency, baseMinorUnits }) =>
-      result(service.estimateProtectedShipping({ currency, minorUnits: baseMinorUnits })),
+      result(await service.estimateProtectedShipping({ currency, minorUnits: baseMinorUnits })),
   );
 
   return server;
