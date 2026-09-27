@@ -56,11 +56,15 @@ A narrowly bounded automatic-action grant can be designed later with its own aut
 
 ## 5. Durable follow-up
 
-Resolve preferences by seller/account and marketplace, then category, then item, subject to non-overridable safety rules. Persist duration/type, pricing mode, explicitly defined floor, offer settings, review/reduction timing, maximum cumulative reduction, relisting criteria, notifications and handling expectations. Preserve the effective policy version and each field's origin.
+Resolve preferences deterministically through non-overridable service safety rules, seller/account defaults, marketplace defaults, category overrides, then item overrides. More-specific policy overrides only explicitly set fields. Persist duration/type, pricing mode, explicitly defined gross/net floor basis, offer settings, review/reduction timing, maximum cumulative reduction, relisting criteria, notifications and handling expectations. Preserve the effective policy version and each field's origin.
 
-An eBay event or timer makes work due. Any authorized worker claims a lease, synchronizes permitted observations, evaluates deterministic rules, persists a recommendation or action proposal, schedules the next obligation and writes a deduplicated notification. A restart or expired lease must not erase work. Multiple hosts must not duplicate actions.
+Strategy and authority are separate. A preference such as “review after seven days” or “offers enabled” does not authorize a live mutation. Ordinary policy editing can change OBSERVE/RECOMMEND behavior, while any future automatic ACT permission is a separately authenticated, narrowly bounded authority grant.
 
-Use events where actually supported, with periodic reconciliation for missed events and delayed metrics. Treat unavailable, stale and zero-valued metrics differently. Notify promptly upon receipt, not with a guarantee that eBay and a host deliver in real time. A no-op stays silent; a prolonged sync failure or approaching fulfillment deadline is actionable.
+When a listing becomes LISTED, the service persists its effective policy and first `next_due_at`. An eBay event or timer makes work due. Any authorized worker claims a lease, synchronizes permitted observations, evaluates deterministic rules, persists a recommendation or action proposal, schedules the next obligation and writes a deduplicated notification. A restart or expired lease must not erase work. Multiple hosts must not duplicate actions. Event and timer triggers converge on this same durable queue.
+
+Use events where actually supported, with periodic reconciliation for missed events and delayed metrics. Treat unavailable, stale and zero-valued metrics differently. A low-activity rule requires adequate metric coverage rather than treating missing traffic as zero. Notify promptly upon receipt, not with a guarantee that eBay and a host deliver in real time. A no-op stays silent; a prolonged sync failure, buyer problem or approaching fulfillment deadline is actionable.
+
+Post-sale follow-up continues through distinct order facts such as paid/ready-to-ship, tracking submitted, carrier acceptance, delivery and financial reconciliation. A sale is not COMPLETE, and a completed transaction may reopen for a return/dispute. Inventory summaries keep unsold asking value, known acquisition cost, estimated net proceeds and realized/reconciled proceeds separate.
 
 ChatGPT routines are an optional scheduler adapter, subject to a real custom-tool execution test. A service worker plus system timer is the reliable baseline. LLM work needs an explicitly configured runner; it cannot happen merely because a due row exists. Policy correctness does not depend on a living conversation.
 
