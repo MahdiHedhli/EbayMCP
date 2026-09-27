@@ -40,6 +40,14 @@ No universal `manage_ebay`, generic HTTP/XML call, SQL tool, or arbitrary filesy
 
 Publication action states are `PREPARED → AWAITING_APPROVAL → APPROVED → EXECUTING → SUCCEEDED`, with `REJECTED`, `EXPIRED`, `REVOKED`, `FAILED` and `UNKNOWN` branches. Only a human-authenticated review endpoint can create an ordinary approval. On UNKNOWN, reconcile external state before deciding whether another request is safe.
 
+## Policy inheritance and scheduled-work surface
+
+Policy resolution is deterministic: service safety invariants → seller/account defaults → marketplace defaults → category overrides → item overrides. A more specific value wins only where that field is explicitly set; absence inherits and an explicit `null` has field-defined semantics. Persist the resolved policy version on each evaluation/action and expose each field's source so the seller can answer “why did it do that?”
+
+Separate strategy from authority. A seller may configure pricing cadence, offer thresholds, listing duration, handling expectations and notifications without thereby authorizing live mutations. Automatic ACT authority, if introduced later, is a distinct bounded grant with its own authenticated human activation, eligible operations, floor/cap, expiry and revocation. Ordinary agent-facing policy tools cannot create that grant.
+
+The service computes and persists `next_due_at` from policy plus observed events. Schedulers wake work; they do not own the schedule's meaning. Event-driven work and timer-driven work enter the same durable queue and evaluation path, so ChatGPT, Codex and a service worker cannot produce divergent behavior.
+
 ## Policy and scheduled-work surface
 
 | Tool | Essential contract |
@@ -51,8 +59,9 @@ Publication action states are `PREPARED → AWAITING_APPROVAL → APPROVED → E
 | `claim_due_actions(action_ids, lease_seconds)` | Atomic bounded lease; caller identity is server-derived |
 | `check_listing_status(item_id)` | Read permitted eBay state and persist observations, freshness and gaps |
 | `evaluate_followup(item_id, observation_version, policy_version)` | Deterministic rule evaluation; recommendation/next-due/outbox changes only |
-| `get_items_requiring_attention(filter, cursor?, limit)` | Missing facts, pending approval, stale sync, expiring offer, sale/fulfillment problem |
-| `summarize_active_inventory(filter)` | Counts, age, asking totals, explicitly labeled estimates and observed proceeds |
+| `get_items_requiring_attention(filter, cursor?, limit)` | Missing facts, pending approval, stale sync, low-activity rule hit, expiring offer, buyer-message/problem signal, sale/fulfillment deadline |
+| `summarize_active_inventory(filter)` | Counts, age, asking totals, known acquisition cost, explicitly labeled estimated net proceeds and realized/reconciled proceeds |
+| `list_notifications(filter, cursor?, limit)` | Durable notification outbox/history with urgency, dedupe key and delivery/acknowledgment state; no buyer PII unless necessary |
 
 This is a design inventory, not an instruction to expose every tool on day one. The MVP needs persistence and a minimal listing-status/due-evaluation path. Add `prepare_price_revision`, offer response preparation, message preparation, relist, postage and refund tools only in later accepted slices. The existing executor can dispatch new action types only after their authorization and recovery tests pass.
 
@@ -105,6 +114,16 @@ Future preference fields include listing type/duration, initial strategy, gross/
 A low-activity rule must name its metric, observation window, threshold, freshness and coverage. `unknown`, `not_supported`, `not_authorized` and `stale` are not numerical zero. Never infer the last week had no activity from one current watcher snapshot. Authorized market valuation remains disabled until the discovery rights gate is resolved.
 
 Deduplicate notices by item/listing, rule version, event/observation and meaningful change. Use cooldowns and digests for low urgency, while sale/expiry/deadline events can be urgent. Record attempted and acknowledged delivery separately; do not claim a notification was received merely because it was queued.
+
+## Lifecycle follow-up semantics
+
+A listing entering LISTED schedules its first policy-derived obligation immediately and records the effective policy version. Follow-up can observe supported traffic signals, offers, orders, messages/problems, listing end state and fulfillment deadlines. Recommendations may use only evidence the application is entitled to use, with evidence type and freshness preserved. If comparable-sale data is unavailable or not authorized, the recommendation must say so rather than substituting active asks as sold comps.
+
+Sale detection transitions the workflow into order/fulfillment observation, not directly to COMPLETE. “Sold”, “paid/ready to ship”, “tracking submitted”, “carrier accepted”, “delivered”, “return/dispute open” and “financially reconciled” remain distinct facts. Pack/ship reminders derive from authoritative order deadlines where available. Completion can later reopen for returns, disputes or reconciliation corrections.
+
+Buyer messages are untrusted external content. Observation may surface a redacted summary and urgency signal when the API/data policy permits it. Any outbound message remains ACT and uses an immutable proposed response plus human approval unless a separately designed bounded grant exists.
+
+A low-activity evaluation only fires when its configured metrics have sufficient coverage and freshness. Unknown metrics defer or produce an explicit “insufficient telemetry” recommendation. No-op checks create audit/observation records as needed but do not enqueue user-facing notifications.
 
 ## Bulk safety
 
