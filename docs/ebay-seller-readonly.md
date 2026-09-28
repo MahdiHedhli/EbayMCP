@@ -26,6 +26,8 @@ After configuration, call `get_ebay_seller_connection_status`, then `begin_ebay_
 
 The listing response is an allowlist of item ID, title, type, current asking price, available and sold quantity, times, primary category, watch count, safe eBay URL, pagination, and capture time. Missing values are `null`. In particular, eBay says `WatchCount` is returned only when greater than zero, so an absent watch count is unknown. View count is unknown unless a supported response field is established. Asking prices are not verified sales. Seller/buyer details, private notes, raw XML, and upstream errors are never returned.
 
+Security limitation: the OAuth request uses eBay's base `api_scope` for this Traditional API. A Trading API scope that cryptographically limits this token to read operations has not been established from the official method documentation. Treat a stolen seller token as potentially capable of more than this service exposes. The Worker hardcodes only `GetMyeBaySelling`, keeps tokens encrypted and out of responses, and leaves publication disabled. Confirm the account's effective scope and entitlement during the Sandbox probe before Production activation.
+
 ## Source record
 
 - [GetMyeBaySelling reference](https://developer.ebay.com/devzone/xml/docs/reference/ebay/getmyebayselling.html): ActiveList, pagination, watch count, and 25,000-item cap. No call deprecation was identified in the [current deprecation status](https://developer.ebay.com/develop/get-started/api-deprecation-status); specific historical fields are deprecated, so the adapter uses a narrow allowlist.
