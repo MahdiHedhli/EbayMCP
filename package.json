@@ -1,0 +1,30 @@
+{
+  "name": "ebay-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "worker:dev": "WRANGLER_LOG_PATH=dist/wrangler-logs WRANGLER_SEND_METRICS=false wrangler dev --local",
+    "worker:build": "WRANGLER_LOG_PATH=dist/wrangler-logs WRANGLER_SEND_METRICS=false wrangler deploy --dry-run --outdir dist/worker",
+    "d1:migrate:local": "WRANGLER_LOG_PATH=dist/wrangler-logs WRANGLER_SEND_METRICS=false wrangler d1 migrations apply DB --local",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.1.0",
+    "@modelcontextprotocol/server": "2.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "miniflare": "^4.20260730.0",
+    "tsx": "^4.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.142.0"
+  }
+}
