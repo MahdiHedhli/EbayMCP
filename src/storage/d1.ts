@@ -4,12 +4,17 @@ import type { SaleItemStore, SellerPolicyStore } from "./interfaces.js";
 
 // The small binding shape keeps the storage adapter independent of the Worker runtime.
 export interface D1Binding {
+  batch(statements: D1Statement[]): Promise<unknown[]>;
   prepare(query: string): {
     bind(...values: (string | number | null)[]): {
       run(): Promise<unknown>;
       first<T>(): Promise<T | null>;
     };
   };
+}
+
+export interface D1Statement {
+  run(): Promise<unknown>;
 }
 
 interface SaleItemRow {

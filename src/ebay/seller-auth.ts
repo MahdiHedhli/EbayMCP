@@ -1,7 +1,8 @@
 import { ebayApiBaseUrl, ebayAuthBaseUrl, type EbayConfig } from "./config.js";
 import type { D1Binding } from "../storage/d1.js";
+import { deletionSubjectDigest } from "./subject-digest.js";
 
-const SCOPE = "https://api.ebay.com/oauth/api_scope";
+const SCOPE = "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/commerce.identity.readonly";
 const STATE_LIFETIME_MS = 5 * 60_000;
 const encoder = new TextEncoder();
 
@@ -149,15 +150,26 @@ export class EbaySellerAuth {
     if (!response.ok) throw new Error("EBAY_TOKEN_EXCHANGE_FAILED");
     const tokens = parseTokenResponse(await response.json(), true);
     if (!tokens.refreshToken || !tokens.refreshSeconds) throw new Error("EBAY_TOKEN_RESPONSE_INVALID");
+    // Bind the credential to eBay's immutable userId before persisting it.
+    const identityResponse = await fetch(`${ebayApiBaseUrl(this.config.environment)}/commerce/identity/v1/user/`, {
+      headers: { Authorization: `Bearer ${tokens.accessToken}`, Accept: "application/json" },
+    });
+    if (!identityResponse.ok) throw new Error("EBAY_IDENTITY_UNAVAILABLE");
+    const identity = await identityResponse.json() as { userId?: unknown };
+    if (typeof identity?.userId !== "string" || !identity.userId || identity.userId.length > 128) throw new Error("EBAY_IDENTITY_INVALID");
+    const subjectDigest = await deletionSubjectDigest(identity.userId, this.config.tokenEncryptionKey, this.config.environment);
+    const blocked = await this.db.prepare("SELECT notification_id FROM ebay_account_deletion_receipts WHERE subject_digest = ? LIMIT 1")
+      .bind(subjectDigest).first();
+    if (blocked) throw new Error("EBAY_ACCOUNT_DELETED");
     const now = Date.now();
-    await this.db.prepare(`INSERT INTO ebay_seller_connections (environment, encrypted_tokens, access_expires_at, refresh_expires_at, version, connected_at, updated_at)
-      VALUES (?, ?, ?, ?, 1, ?, ?)
+    await this.db.prepare(`INSERT INTO ebay_seller_connections (environment, encrypted_tokens, access_expires_at, refresh_expires_at, version, connected_at, updated_at, ebay_user_id)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?)
       ON CONFLICT(environment) DO UPDATE SET encrypted_tokens = excluded.encrypted_tokens, access_expires_at = excluded.access_expires_at,
       refresh_expires_at = excluded.refresh_expires_at, version = ebay_seller_connections.version + 1,
-      connected_at = excluded.connected_at, updated_at = excluded.updated_at`)
+      connected_at = excluded.connected_at, updated_at = excluded.updated_at, ebay_user_id = excluded.ebay_user_id`)
       .bind(this.config.environment, await seal(this.config, { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
         new Date(now + tokens.accessSeconds * 1000).toISOString(), new Date(now + tokens.refreshSeconds * 1000).toISOString(),
-        new Date(now).toISOString(), new Date(now).toISOString()).run();
+        new Date(now).toISOString(), new Date(now).toISOString(), identity.userId).run();
   }
 
   async accessToken(): Promise<string> {

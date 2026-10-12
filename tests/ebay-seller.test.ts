@@ -3,6 +3,7 @@ import { Miniflare } from "miniflare";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ActiveListingsService, normalizeActiveListings } from "../src/ebay/active-listings.js";
 import { EbaySellerAuth } from "../src/ebay/seller-auth.js";
+import { deletionSubjectDigest } from "../src/ebay/subject-digest.js";
 import { loadEbayConfig } from "../src/ebay/config.js";
 import type { D1Binding } from "../src/storage/d1.js";
 import worker, { type WorkerEnv } from "../src/worker.js";
@@ -35,8 +36,10 @@ describe("seller OAuth and active listing retrieval", () => {
 
   beforeAll(async () => {
     const d1 = await runtime.getD1Database("DB");
-    const sql = readFileSync(new URL("../migrations/003_ebay_seller_auth.sql", import.meta.url), "utf8");
-    for (const statement of sql.split(";").map((part) => part.trim()).filter(Boolean)) await d1.prepare(statement).run();
+    for (const file of ["003_ebay_seller_auth.sql", "004_marketplace_account_deletion.sql"]) {
+      const sql = readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8");
+      for (const statement of sql.split(/;\s*\n/).map((part) => part.trim()).filter(Boolean)) await d1.prepare(statement).run();
+    }
     db = d1 as unknown as D1Binding;
     auth = new EbaySellerAuth(db, config);
   });
@@ -44,6 +47,7 @@ describe("seller OAuth and active listing retrieval", () => {
     vi.unstubAllGlobals();
     await db.prepare("DELETE FROM ebay_oauth_states").bind().run();
     await db.prepare("DELETE FROM ebay_seller_connections").bind().run();
+    await db.prepare("DELETE FROM ebay_account_deletion_receipts").bind().run();
   });
   afterAll(async () => { await runtime.dispose(); });
 
@@ -58,8 +62,10 @@ describe("seller OAuth and active listing retrieval", () => {
     const callback = new URL(config.callbackUrl!);
     callback.searchParams.set("state", consent.searchParams.get("state")!);
     callback.searchParams.set("code", "synthetic-code");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ access_token: "synthetic-access", refresh_token: "synthetic-refresh",
-      expires_in: 7200, refresh_token_expires_in: 100000 }), { status: 200 })));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("/commerce/identity/")
+      ? { userId: "synthetic-immutable-user" }
+      : { access_token: "synthetic-access", refresh_token: "synthetic-refresh",
+        expires_in: 7200, refresh_token_expires_in: 100000 }), { status: 200 })));
     await auth.callback(callback);
     return { callback, begin };
   }
@@ -82,6 +88,14 @@ describe("seller OAuth and active listing retrieval", () => {
     await expect(auth.callback(invalid)).rejects.toThrow("EBAY_CALLBACK_INVALID");
     await db.prepare("UPDATE ebay_oauth_states SET expires_at = ? WHERE environment = ?").bind(new Date(0).toISOString(), "sandbox").run();
     await expect(auth.authorize(new URL(second.connectUrl))).rejects.toThrow("EBAY_CALLBACK_INVALID");
+  });
+
+  it("rejects a seller reconnection after a verified deletion receipt", async () => {
+    const digest = await deletionSubjectDigest("synthetic-immutable-user", sandboxKey, "sandbox");
+    await db.prepare("INSERT INTO ebay_account_deletion_receipts(notification_id, subject_digest, processed_at, erased_connections) VALUES (?, ?, ?, 0)")
+      .bind("synthetic-deletion", digest, new Date().toISOString()).run();
+    await expect(connect()).rejects.toThrow("EBAY_ACCOUNT_DELETED");
+    expect(await db.prepare("SELECT environment FROM ebay_seller_connections WHERE environment = ?").bind("sandbox").first()).toBeNull();
   });
 
   it("refreshes an expired access token and marks revoked credentials for reconnect", async () => {

@@ -3,6 +3,7 @@ import { authChallenge, oauthConfig, resourceMetadata, verifyOAuthToken, type OA
 import { loadEbayConfig } from "./ebay/config.js";
 import { EbaySellerAuth } from "./ebay/seller-auth.js";
 import { ActiveListingsService } from "./ebay/active-listings.js";
+import { accountDeletionRoute } from "./ebay/account-deletion.js";
 import { buildMcpServer } from "./mcp/server.js";
 import { DraftService } from "./service/draft-service.js";
 import { PolicyService } from "./service/policy-service.js";
@@ -19,6 +20,8 @@ export interface WorkerEnv extends OAuthEnv {
   EBAY_CALLBACK_URL?: string;
   EBAY_TOKEN_KEY_SANDBOX?: string;
   EBAY_TOKEN_KEY_PRODUCTION?: string;
+  EBAY_DELETION_ENDPOINT?: string;
+  EBAY_DELETION_VERIFICATION_TOKEN?: string;
 }
 
 async function validToken(provided: string | null, expected: string | undefined): Promise<boolean> {
@@ -38,8 +41,13 @@ async function validToken(provided: string | null, expected: string | undefined)
 }
 
 export default {
+  async scheduled(_event: unknown, env: WorkerEnv): Promise<void> {
+    await env.DB.prepare("DELETE FROM ebay_account_deletion_receipts WHERE processed_at < ?")
+      .bind(new Date(Date.now() - 90 * 86_400_000).toISOString()).run();
+  },
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/ebay/marketplace-account-deletion") return accountDeletionRoute(request, env);
     const config = oauthConfig(env);
     if (url.pathname === "/ebay/oauth/start") {
       if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
