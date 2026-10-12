@@ -14,3 +14,8 @@ EBAY_CLIENT_SECRET=
 EBAY_RUNAME=
 EBAY_CALLBACK_URL=https://worker.example.invalid/ebay/oauth/callback
 EBAY_TOKEN_KEY_SANDBOX=
+# Account deletion callback. Use Worker secrets for real values; keep this sample synthetic.
+EBAY_DELETION_ENDPOINT=https://worker.example.invalid/ebay/account-deletion
+EBAY_DELETION_VERIFICATION_TOKEN=
+# Independent 32-byte random key, base64 encoded. Keep stable to preserve subject links.
+EBAY_DELETION_HASH_KEY=

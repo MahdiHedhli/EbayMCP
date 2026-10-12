@@ -31,3 +31,5 @@ The Worker rejects unauthenticated `/mcp` requests and cross-origin browser requ
 ## eBay seller connection
 
 The read-only seller OAuth and active-listing integration is described in [docs/ebay-seller-readonly.md](docs/ebay-seller-readonly.md). It requires environment-specific eBay Developer Portal values, a Cloudflare encryption secret, and D1 migration 003 before live use.
+
+The public Marketplace Account Deletion callback, D1 migration 004, subject-link coverage, and review gates are described in [docs/marketplace-account-deletion.md](docs/marketplace-account-deletion.md). It is not registered with eBay or deployed by this repository change.

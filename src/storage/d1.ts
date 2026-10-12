@@ -10,6 +10,7 @@ export interface D1Binding {
       first<T>(): Promise<T | null>;
     };
   };
+  batch(statements: unknown[]): Promise<unknown[]>;
 }
 
 interface SaleItemRow {
